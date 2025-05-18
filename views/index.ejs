@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CRUD with Node.js + TypeScript + MongoDB</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+    }
+
+    form {
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      transition: border-color 0.3s ease;
+    }
+
+    input[type="text"]:focus {
+      border-color: #2980b9;
+      outline: none;
+    }
+
+    button {
+      padding: 0.5rem 1.2rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      background-color: #2980b9;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #1c5980;
+    }
+
+    button#cancel-btn {
+      background-color: #e74c3c;
+      display: none;
+    }
+
+    button#cancel-btn:hover {
+      background-color: #b73023;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      background: white;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    thead {
+      background-color: #2980b9;
+      color: white;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    tbody tr:hover {
+      background-color: #f1f8ff;
+    }
+
+    .actions {
+      width: 120px;
+      text-align: center;
+    }
+
+    .edit, .delete {
+      cursor: pointer;
+      font-size: 1.2rem;
+      margin: 0 0.3rem;
+      user-select: none;
+      transition: color 0.3s ease;
+    }
+
+    .edit:hover {
+      color: #27ae60;
+    }
+
+    .delete:hover {
+      color: #e74c3c;
+    }
+  </style>
+</head>
+<body>
+  <h1>CRUD Application</h1>
+
+  <form id="item-form">
+    <input type="hidden" id="item-id" />
+    <input type="text" id="item-name" placeholder="Enter item name" required />
+    <button type="submit" id="submit-btn">Add</button>
+    <button type="button" id="cancel-btn">Cancel</button>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item Name</th>
+        <th class="actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="items-list">
+      <% items.forEach(item => { %>
+        <tr data-id="<%= item._id %>">
+          <td class="item-name"><%= item.name %></td>
+          <td class="actions">
+            <span class="edit" title="Edit">✏️</span>
+            <span class="delete" title="Delete">🗑️</span>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+
+  <script>
+    const form = document.getElementById('item-form');
+    const nameInput = document.getElementById('item-name');
+    const idInput = document.getElementById('item-id');
+    const submitBtn = document.getElementById('submit-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const itemsList = document.getElementById('items-list');
+
+    // Add or Update item
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = nameInput.value.trim();
+      const id = idInput.value;
+
+      if (!name) return alert('Please enter item name');
+
+      if (id) {
+        // Update
+        const res = await fetch('/api/items/' + id, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ name })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          const tr = itemsList.querySelector(`tr[data-id="${id}"]`);
+          tr.querySelector('.item-name').textContent = updated.name;
+          resetForm();
+        } else {
+          alert('Failed to update item');
+        }
+      } else {
+        // Create
+        const res = await fetch('/api/items', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ name })
+        });
+        if (res.ok) {
+          const newItem = await res.json();
+          addItemToList(newItem);
+          resetForm();
+        } else {
+          alert('Failed to add item');
+        }
+      }
+    });
+
+    // Cancel edit
+    cancelBtn.addEventListener('click', () => {
+      resetForm();
+    });
+
+    // Edit and Delete event delegation
+    itemsList.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('edit')) {
+        const tr = e.target.closest('tr');
+        const id = tr.getAttribute('data-id');
+        const name = tr.querySelector('.item-name').textContent;
+        nameInput.value = name;
+        idInput.value = id;
+        submitBtn.textContent = 'Update';
+        cancelBtn.style.display = 'inline-block';
+      }
+
+      if (e.target.classList.contains('delete')) {
+        if (!confirm('Are you sure you want to delete this item?')) return;
+        const tr = e.target.closest('tr');
+        const id = tr.getAttribute('data-id');
+        const res = await fetch('/api/items/' + id, { method: 'DELETE' });
+        if (res.ok) {
+          tr.remove();
+          if (idInput.value === id) resetForm();
+        } else {
+          alert('Failed to delete item');
+        }
+      }
+    });
+
+    // Helpers
+    function addItemToList(item) {
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-id', item._id);
+      tr.innerHTML = `
+        <td class="item-name">${item.name}</td>
+        <td class="actions">
+          <span class="edit" title="Edit">✏️</span>
+          <span class="delete" title="Delete">🗑️</span>
+        </td>
+      `;
+      itemsList.appendChild(tr);
+    }
+
+    function resetForm() {
+      nameInput.value = '';
+      idInput.value = '';
+      submitBtn.textContent = 'Add';
+      cancelBtn.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
